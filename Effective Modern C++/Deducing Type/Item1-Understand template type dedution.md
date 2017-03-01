@@ -1,9 +1,9 @@
-# Item1: Understand template type dedution
+# Item1: Understand Template Type Dedution
 
 
 函数模板的形式如下:
     
-    tmeplate <typename T>
+    tmeplate<typename T>
     void foo(ParamType param);
 
 函数调用的形式如下:
@@ -12,7 +12,7 @@
 
 在编译期间，编译器会推断T和ParamType。ParParamType通常会包含一些修饰符，比如const、&等，如下：
 
-    template <typename>
+    template<typename>
     void foo(const T& param);
 
 T的类型推断是由expr和ParamType共同决定的。如下根据ParamTpye分成三种情况：
@@ -29,7 +29,7 @@ T的类型推断是由expr和ParamType共同决定的。如下根据ParamTpye分
 
 比如：
 
-    template <typename T>
+    template<typename T>
     void foo(T& param);
     
     int x = 27;
@@ -42,7 +42,7 @@ T的类型推断是由expr和ParamType共同决定的。如下根据ParamTpye分
 
 这种情况下，为了保证const变量的安全，const将成为T的一部分。如果param包含const修饰，如下：
 
-    template <typename T>
+    template<typename T>
     void foo(const T& param);
 
     foo(x);     //T is int, ParamType is const int&.
@@ -51,7 +51,7 @@ T的类型推断是由expr和ParamType共同决定的。如下根据ParamTpye分
 
 param为指针的表现与引用类似，如下：
 
-    template <typename T>
+    template<typename T>
     void foo(T* param);
     const int* cpx = &x;
 
@@ -69,7 +69,7 @@ param为指针的表现与引用类似，如下：
 
 比如：
 
-    template <typename T>
+    template<typename T>
     void foo(T&& param);    //ParamType is a Universal Reference.
 
     foo(x);     //T is int&, ParamType is int&.
@@ -88,7 +88,7 @@ param为指针的表现与引用类似，如下：
 
 如下：
     
-    template <typename T>
+    template<typename T>
     void foo(T param);      //param is passing by value.
 
     foo(x);     //T is a int, ParamType is a int.    
@@ -116,18 +116,18 @@ const被忽略的原因在于：param是一个copy，被copy对象不可变不�
 
 考虑数组作为expr的情况：
 
-    template <typename T>
+    template<typename T>
     void foo(T param);      //by-value.
 
     foo(name);  //T is const char*, param is const char*.
                 //array decays to pointer.
 
-    template <typename T>
+    template<typename T>
     void foo(T& param);      //by-reference.
 
     foo(name);  //T is const char[5], ParamType is const char(&)[5].
 
-    template <typename T>
+    template<typename T>
     void foo(T* param);      //by-pointer.
 
     foo(name);  //T is const char, ParamType is const char*.
@@ -135,7 +135,7 @@ const被忽略的原因在于：param是一个copy，被copy对象不可变不�
 通过该特性，就可以实现以下模板：
 
     //aquire the size of an array at compile time.
-    template <typename T, size_t N>
+    template<typename T, size_t N>
     constexpr size_t ArraySize(T (&)[N]) noexcept {
         return N;
     }
@@ -147,17 +147,17 @@ const被忽略的原因在于：param是一个copy，被copy对象不可变不�
 
     void func(int,double);   //type is void(int,double).
 
-    template <typename T>
+    template<typename T>
     void foo(T param);       //by-value.
 
     foo(func);  //T is void(*)(int,double), ParamType is void(*)(int,double).
 
-    template <typename T>
+    template<typename T>
     void foo(T param);      //by-reference.
 
     foo(func);  //T is void(int,double), ParamType is void(&)(int,double).
 
-    template <typename T>
+    template<typename T>
     void foo(T* param);      //by-pointer.
 
     foo(func);  //T is void(int,double),ParamType is void(*)(int,double).

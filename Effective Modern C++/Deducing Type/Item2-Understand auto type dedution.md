@@ -8,14 +8,14 @@ Auto的类型推断与item1的模板类型推断基本一致。在auto推断中�
 
     auto x = 27;
 
-    template <typename T>
+    template<typename T>
     void funcx(T param);
     
     funcx(27);      //T is int, so auto is int. ParamType is int.
 
     const auto cx = x;
     
-    template <typename T>
+    template<typename T>
     void funccx(const T param);
 
     funccx(x);      //T is int, so auto is int. ParamType is const int.
@@ -23,7 +23,7 @@ Auto的类型推断与item1的模板类型推断基本一致。在auto推断中�
 
     const auto& crx = x;
 
-    template <typename T>
+    template<typename T>
     void funccrx(const T& param);
 
     funccrx(x);     //T is int, so auto is int. ParamType is const int&.
@@ -75,14 +75,14 @@ barced-initializer_list是auto和template类型推断的唯一不同之处。tem
 
 注意直接初始化和赋值初始化对于{}initializer的区别。
 
-    template <typename T>
+    template<typename T>
     void foo(T param);
     
     foo({ 1, 2, 3 });       //error, connot deduce type for T.
 
 想要实现对T的template推断，可以如下声明：
 
-    template <typename T>
+    template<typename T>
     void foo(std::initializer_list<T> inilist);
 
     f({1, 2, 3});           //valid, T is int, ParamType is initializer_list<int>.

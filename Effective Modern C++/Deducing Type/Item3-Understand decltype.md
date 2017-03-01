@@ -16,7 +16,7 @@ decltype获取一个表达式，返回一个表达式的类型。
 
     if(f(w))...                 //decltype(f(w)) is bool.
 
-    template <typename T>
+    template<typename T>
     class vector {
         public:
         T& operator[](std::size_t index);
@@ -34,7 +34,7 @@ decltype获取一个表达式，返回一个表达式的类型。
 
 比如：
 
-    template <typename Container, typename Index>
+    template<typename Container, typename Index>
     auto access(Container& c, Index i) ->decltype(c[i]) {   
         ...
         return c[i];        //access c[i].
@@ -56,7 +56,7 @@ decltype分辨出c[i]的类型是T&，所以可以通过access读写c[i]。
 再看item2中提到的, 自C++14起，
 允许为多语句lambda以及函数进行自动返回值推断。如下：
 
-    template <typename Container, typename Index>
+    template<typename Container, typename Index>
     auto access(Container& c, Index i) {   
         ...
         return c[i];        //omit the referenceness.
@@ -74,7 +74,7 @@ decltype分辨出c[i]的类型是T&，所以可以通过access读写c[i]。
 同时在C++14中，提供了更加优雅的使用decltype的方式，
 使得decltype类型推断被使用，如下：
 
-    template <typename Container, typename Index>
+    template<typename Container, typename Index>
     decltype(auto) access(Container& c, Index i) {   
         ...
         return c[i];        //use the decltype rules.
