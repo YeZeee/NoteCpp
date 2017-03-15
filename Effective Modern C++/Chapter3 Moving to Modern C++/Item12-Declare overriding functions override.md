@@ -129,32 +129,31 @@ reference qualifiers可以理解为修饰*this的qualifier，这点和member fun
 
     auto vals2 = makeWidget().data();   // Copy too.
 
-前一个用户代码，data()返回了一个value的左值引用，所以调用了copy-assignment，没有问题。第二个用户代码也是类似的操作，所以也没有问题。但是可以发现makeWidget()返回的是一个Widget的临时对象，是一个右值，在表达式结束后就被立刻销毁，所以使用拷贝整个values是浪费时间的，应该使用移动的方式节省时间，即调用vector的move-assignment。
+前一个用户代码，data()返回了一个value的左值引用，所以调用了copy-constructor，没有问题。第二个用户代码也是类似的操作，所以也没有问题。但是可以发现makeWidget()返回的是一个Widget的临时对象，是一个右值，在表达式结束后就被立刻销毁。所以使用拷贝整个values是浪费时间的，应该使用移动语义的方式节省时间，即调用vector的move-constructor:
 
     class Widget {
     public:
         using DataType = std::vector<double>;
         ...
         DataType& data() & { return values; }
-        DataType&& data() & { return std::move(values); }
+        DataType&& data() && { return std::move(values); }
     private:
         DataType values;
     };
 
+    // Client code：
+    Widget w;
+    ...
+    auto vals1 = w.data();      // Fine.copy the w.values to vals1.
+                                // Use copy-constructor.
+    Widget makeWidget();
 
+    auto vals2 = makeWidget().data();   // Move the values to vals2.
+                                        // Use move-constructor.
 
+还有一点要注意的是，一旦一个member function被reference qualify，所有重载函数都要reference qualify。因为不进行qualify，就意味这重载函数不论左右值*this都可以使用，这些重载函数会对reference qualified one产生竞争，容易导致多义。
 
+## Things to Remember
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+- 使用*override*声明override function。
+- 使用reference qualifier让左右值的对象有不同的行为。
