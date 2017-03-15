@@ -1,4 +1,4 @@
-# Item3: Understand Decltype
+# Item3: Understand *decltype*
 
 decltype获取一个表达式，返回一个表达式的类型。
 大多数情况其结果如常规想象，但是偶尔也会出一些令人意想不到的结果。

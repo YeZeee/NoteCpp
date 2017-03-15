@@ -1,4 +1,4 @@
-# Item8: Prefer nullptr to 0 and NULL
+# Item8: Prefer *nullptr* to 0 and *NULL*
 
 在C++中，字面值0是一个int，在contxet中，0有可能被解释为null pointer。
 但是这是后置位的情形，0依旧是一个int而不是null pointer。
