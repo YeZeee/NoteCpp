@@ -1,0 +1,1 @@
+Write some miscellaneous mechanism about C++.
