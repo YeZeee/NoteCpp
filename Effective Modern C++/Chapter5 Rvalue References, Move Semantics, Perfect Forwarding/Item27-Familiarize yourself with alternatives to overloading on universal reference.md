@@ -93,11 +93,38 @@ Item26阐明了同时使用*perfect forwarding template*和*overloading function
         std::string name;
     };       
 
-以上内容属于C++模板元编程的内容。
-
 ## Trade-offs
 
+所有方法中，采用*perfect forwarding template*的方法应该比其他方法更加高效，理由在Item26中说过。但是*perfect forwarding template*也有劣势。其一有些参数无法进行完美转发，见Item30。其二就是C++虐心的错误消息了：
 
+    Person p(u"Konrad Zuse");   // const char16_t
 
+u"Konrad Zuse"是不匹配string的构造函数的，这样会抛出错误消息。但是这个错误是在多层转发之后才能发现的，会导致错误信息可读性极差。
 
+在这个例子中，我们知道参数是用于初始化*std::string*的，所以可以使用*static_assert*进行检查:
 
+    class Person {
+    public:
+        template<typename T, 
+                 typename = std::enable_if_t<!std::is_base_of_v<Person, std::decay_t<T>> &&
+                 !std::is_integral_v<std::remove_reference_t<T>> >>
+        explicit Person(T&& n)
+            : name(std::forward<T>(n)) {
+                static_assert(
+                    std::is_constructible_v<std::string T>,
+                    "Parameter n cannot be used to construct a std::string"
+                );
+            }
+        explicit Person(int idx)
+            : name(nameFromIdx(idx)) {}
+    private:
+        std::string name;
+    };
+
+*std::is_constructible*是用于检测initializer的类型是否可以用于构造另一个类型的。这能给我们一个特殊的错误提示，但是可惜的是*static_assert*的出现位置晚于构造，因为构造函数先构造对象后执行函数体。
+
+## Things to Remember
+
+- 解决*perfect forwarding template*和*overloading*的矛盾，可以有以下解决办法：放弃重载、用按常右值引用传参、用按值传参、使用*tag dispatch*。
+- 可以使用*SFINAE*限制*perfect forwarding template*的应用场景。
+- *perfect forwarding template*具有更高的效率，但是易错难用。
