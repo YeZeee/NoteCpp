@@ -61,7 +61,7 @@ Auto的类型推断与item1的模板类型推断基本一致。在auto推断中�
     auto func1 = func;      //by-value, func1 is void(*)(int,double).
     auto& func2 = func;     //by-lreference, func2 is void(&)(int,double).
 
-## Iraced-Initializer and Parenthesis-Initializer
+## Braced-Initializer and Parenthesis-Initializer
 
 barced-initializer_list是auto和template类型推断的唯一不同之处。template是不能直接推断出initializer-list的。
 考虑以下定义：
