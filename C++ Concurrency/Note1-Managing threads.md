@@ -263,8 +263,3 @@ C++线程通过类*std::thread*来实现。有以下特点：
         }
         do_otherthing();
     }
-
-
-
-
-
