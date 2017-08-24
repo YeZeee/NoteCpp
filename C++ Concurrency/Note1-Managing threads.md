@@ -208,6 +208,63 @@ C++线程通过类*std::thread*来实现。有以下特点：
 
 ## Choosing the number of threads at runtime
 
-*std::thread::hardware_concurrency()*可以获取当前硬件可以进行的并行处理。
+*std::thread::hardware_concurrency()*可以获取当前硬件可以进行的并行处理线程数量。如下实现一个并行加法：
+
+    template <typename Iterator>
+    struct parallel_accumulate_block {
+        void operator()(const Iterator& _begin, const Iterator& _end, typename Iterator::value_type& _result) {
+            _result = std::accumulate(_begin, _end, static_cast<typename Iterator::value_type>(0));
+        }
+    };
+
+    template <typename Iterator>
+    typename Iterator::value_type parallel_accumulate(const Iterator& _begin,
+                                                    const Iterator& _end,
+                                                    typename Iterator::value_type _init) {
+        auto arraySize = std::distance(_begin, _end);
+        if(!arraySize)
+            return _init;
+        const unsigned int MinPerThread = 25;
+        auto maxThread = (arraySize + MinPerThread - 1) / MinPerThread;
+        auto numHardwareThread = std::thread::hardware_concurrency();
+        auto numThread = std::min(numHardwareThread != 0?numHardwareThread:1, maxThread);
+        auto blockSize = arraySize / numThread;
+
+        std::vector<std::thread> threads;
+        std::vector<typename Iterator::value_type> results;
+        threads.reserve(numThread - 1);
+        results.resize(numThread);
+
+        auto iterBlockBegin = _begin;
+        auto iterBlockEnd = iterBlockBegin;
+        for(unsigned int i = 0; i < numThread - 1; i++) {
+            std::advance(iterBlockEnd, blockSize);
+            threads.emplace_back(parallel_accumulate_block<Iterator>(), iterBlockBegin, iterBlockEnd, std::ref(results[i]));
+            std::advance(iterBlockBegin, blockSize);
+        }
+    
+        parallel_accumulate_block<Iterator>()(iterBlockBegin, _end, results[numThread - 1]);
+        std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
+        return std::accumulate(cbegin(results), cend(results), static_cast<typename Iterator::value_type>(_init));
+    }
+
+值得注意的是，上述并行加法的实现对传入数据和迭代器具有一定要求：
+- 传入的数据类型的加法计算要求必须是没有特定结合性要求的。
+- *std::accumulate*要求的迭代器是*InputIterator*，而*parallel_accumulate*要求是*ForwardIterator*。
+
+## Identifying threads
+
+*std::thread*通过*std::thread::id*来标识一个线程，*std::thread::id*通过默认构造指代一个无关联线程的*std::thread*，并且提供比较操作符，因此可以用于关联容器的键值、排序、比较等操作。
+
+    std::thread::id masterThreadId;
+    void func() {
+        if(std::this_thread::get_id == masterThreadId) {
+            do_something();
+        }
+        do_otherthing();
+    }
+
+
+
 
 
