@@ -21,7 +21,7 @@
 
 这是在并发编程中常见的BUG原因：*race condition*，也称*data race*。
 
-### race condition and avoiding problematic race conditions
+### Race condition and avoiding problematic race conditions
 
 *race condition*通常指代那些会导致BUG的竞争条件，其带来的BUG通常是未定义行为。
 
@@ -33,8 +33,130 @@
 2. 改造共享数据结构的设计，使得该结构进行的修改操作不会破坏数据结构的不变性，即*lock-free programing*。
 3. *software transactional memory*，STM
 
-## Protecting shared data with mutexed
+## Protecting shared data with mutexes
+
+解决*race condition*的一种通用方法就是将访问共享数据的代码块设置为互斥，即*mutually exclusive*。这样一来当有线程访问共享数据，其他线程就必须等待访问结束后再进行访问。
+
+这一过程使用*mutex*来实现，在访问共享数据前，*lock*一个和该数据关联的*mutex*；在访问结束后，*unlock*这个*mutex*。
+
+标准线程库保证了当一个线程锁定一个*mutex*，其他试图锁定该*mutex*的线程都要等候至该*mutex*被解锁。
+
+互斥器*mutex*听起来十分简单，但非银弹：
+1. 构造好代码结构保护目标数据
+2. 防止*race condition*在接口之间传递
+3. *mutex*自身存在*deadlock*等问题
+
+### Using mutexes in C++
+
+C++标准库通过*std::mutex*实现*mutex*：
+- *lock()*锁定*mutex*，当不能锁定时阻塞。
+- *unlock()*解锁*mutex*。
+
+并且有*RAII*风格的*std::lock_guard*来替代手动的*unlock*。
+
+    class listForThread {
+    public:
+        void pushToList(int _val) {
+            std::lock_guard<std::mutex> lguark(m_mutexForList);
+            m_list.push_back(_val);
+        }
+        bool findInList(int _val) {
+            std::lock_guard<std::mutex> lguark(m_mutexForList);
+            return std::find(std::begin(m_list), std::end(m_list), _val) != m_list.end();
+        }
+    private:
+        std::list<int> m_list;
+        std::mutex m_mutexForList;
+    };
+
+通过上述代码，实现了*list*的*find*和*push*两种操作的互斥。
+
+但是需要非常注意的是，即使所有操作都使用*std::mutex*实现操作互斥，但是函数接口仍然有可能会将*race condition*泄露。比如：
+
+    class listForThread {
+    public:
+        typename std::list<int>::iterator beginOfList() {
+            std::lock_guard<std::mutex> lguark(m_mutexForList);
+            ...
+            return m_list.begin();
+        }
+    }
+
+该代码将内部数据的一个迭代器向外传递。外部代码则可以绕过类接口直接访问内部链表，导致*race condition*。因此函数接口涉及指针、引用和迭代器时，需要格外注意产生*race condition*的泄露。良好的互斥设计应该包含整个数据访问的过程，而不是仅仅是简单的函数开头与结尾。
+
+### Structuring code for protecting shared data
+
+使用*mutex*保护数据的代码设计十分复杂，不仅仅是使用*std::lock_guard*和注意函数是否有指针引用接口就完事的。某些隐藏性很强的接口也有可能会使得*race condition*泄露：
+
+    class data {
+    public:
+        void some_func();
+    prvate:
+        int i;
+    };
+
+    class data_wraper {
+    public:
+        template<typename Func>
+        void someFunc(Func f) {
+            std::lock_guard<std::mutex> g(m_mutex);
+            f(m_data);
+        }
+    private:
+        data m_data;
+        std::mutex m_mutex;
+    };
+
+    data* p;
+    void maliciousFunc(data& _d) {
+        p = &_d;
+    }
+
+    void foo() {
+        data_wraper d;
+        d.someFunc(maliciousFunc);
+        p->somefunc();
+    }
+
+这种*race condition*泄露的问题的根本原因是没有做到：将所有涉及访问目标数据块的操作标示为互斥。因此使用*std::mutex*遵守以下原则以避免*race condition*外泄：
+
+- 不要将被保护数据的指针和引用传出*mutex lock*的范围，不论是显式的还是隐式，比如传参、返回、传递给未知实现的函数。
+
+### Spotting race conditions inherent in interfaces
+
+即使严格遵守了上述原则，函数接口依旧有可能导致潜在的*race condition*，这是由于函数本身的操作决定的，不仅仅发生在互斥设计中，也会发生在*lock-free programing*中。
+
+因为并发实现中，可能会使某些函数失去原本的意义，该函数所得到的结果是不可信的，比如*stack*：
+
+    template<typename T,typename Container=std::deque<T> >
+    class stack
+    {
+    public:
+        explicit stack(const Container&);
+        explicit stack(Container&& = Container());
+        template <class Alloc> explicit stack(const Alloc&);
+        template <class Alloc> stack(const Container&, const Alloc&);
+        template <class Alloc> stack(Container&&, const Alloc&);
+        template <class Alloc> stack(stack&&, const Alloc&);
+        bool empty() const;
+        size_t size() const;
+        T& top();
+        T const& top() const;
+        void push(T const&);
+        void push(T&&);
+        void pop();
+        void swap(stack&&);
+    };
 
 
+栈的操作只有5种，在并发编程中，函数*empty*和*size*将不再可信。因为其一旦完成了操作，则其他线程就可以访问改变*stack*，在该线程所得的信息将失去意义。
 
+    stack<int> s;
+    if(!s.empty()) {
+        const int i = s.top();
+        s.pop();
+        do_something(i);
+    }
+
+其他线程的操作可以插入上述每一行代码之间，导致未定义问题，甚至使程序崩溃。
 
