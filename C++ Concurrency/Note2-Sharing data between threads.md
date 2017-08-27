@@ -149,14 +149,82 @@ C++标准库通过*std::mutex*实现*mutex*：
     };
 
 
-栈的操作只有5种，在并发编程中，函数*empty*和*size*将不再可信。因为其一旦完成了操作，则其他线程就可以访问改变*stack*，在该线程所得的信息将失去意义。
+栈的操作只有5种，在并发编程中，函数*empty*和*size*将不再可信。因为其一旦完成了操作，则其他线程就可以访问改变*stack*，在该线程所得的信息将失去意义。假设*stack*的5种操作都加上了互斥保护，存在以下接口的组合使用：
 
     stack<int> s;
     if(!s.empty()) {
-        const int i = s.top();
-        s.pop();
+        const int i = s.top();  // 1
+        s.pop();                // 2
         do_something(i);
     }
 
-其他线程的操作可以插入上述每一行代码之间，导致未定义问题，甚至使程序崩溃。
+其他线程的操作可以插入上述每一行代码之间，导致未定义问题，甚至使程序崩溃。比如在代码1和2之间可以插入*pop*使得源代码的遍历功能失效。
+
+想要将*pop*和*top*纳入互斥保护，就需要有新的实现接口来使得两个操作纳入一个互斥保护，但这又引入了新的异常安全的问题：
+
+比如存在数据类型*stack\<vector\<int\>\>*。接口*topandpop*为了互斥保护，同时实现了*pop*和*top*的功能。但是*topandpop*为了返回被*pop*的对象，必须调用*std::vector*的构造函数，这一过程可能会抛出异常，但是抛出异常时，*stack*已经被改变。分离的*pop*和*top*操作不会有这样的问题，因为当*top*操作抛出异常时，*pop*操作还没有执行。为了解决*race condition*和*exception safety*纠缠的问题，需要设计好函数接口，有如下几种方法：
+
+#### Pass a reference
+
+为了使得构造函数不在接口内部被调用，可以使用引用参数作为返回接口：
+
+    std::vector<int> result;
+    some_stack.pop(result);
+
+这样就要求用户代码必须先自行进行目标对象的构造，并且要求返回类型是可赋值类型。
+
+#### Require a nothrow copy constructor or move constructor
+
+许多类型的复制构造函数是*nothrow*的，即使复制构造函数会抛出异常，还有许多类型的移动构造函数也是*nothrow*的。可以使用编译期检查*std::is_nothrow_copy_constructible*和*std::is_nothrow_move_constructible*。
+
+#### Return a pointer to the popped item
+
+可以使用指针返回替代值返回，这样可以使得构造函数在改变*stack*之前被调用。但是这就涉及到了内存管理，而且对于简单类型而言，这样的开销甚至超出了简单的值返回。可以使用智能指针作为返回类型。
+
+如下实现了引用参数返回和智能指针返回，解决了*race condition*和*exception safety*纠缠的问题：
+
+    struct empty_stack: std::exception{
+        const char* what() const noexcept;
+    };
+
+    template<typename T>
+    class threadsafe_stack {
+    public:
+        threadsafe_stack() {}
+        threadsafe_stack(const threadsafe_stack& _stack) :m_stack(_stack) {}
+        threadsafe_stack& operator=(const threadsafe_stack&) = delete;
+
+        void push(T _val) {
+            std::lock_guard<std::mutex> g(m_mutex);
+            m_stack.push(_val);
+        }
+        std::shared_ptr<T> pop() {
+            std::lock_guard<std::mutex> g(m_mutex);
+            if(m_stack.empty())
+                throw empty_stack();
+            std::shared_ptr<T> ret(std::make_shared<T>(m_stack.top()));
+            m_stack.pop();
+            return ret;
+        }
+        void pop(T& _val) {
+            std::lock_guard<std::mutex> g(m_mutex);
+            if(m_stack.empty())
+                throw empty_stack();
+            _val = m_stack.top();
+            m_stack.pop();
+        }
+        bool empty() const {
+            std::lock_guard<std::mutex> g(m_mutex);
+            return m_stack.empty();
+        }
+
+    private:
+        std::mutex m_mutex;
+        std::stack<T> m_stack;
+    };
+
+
+
+
+
 
