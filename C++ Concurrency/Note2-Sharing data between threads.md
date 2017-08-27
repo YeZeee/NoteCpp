@@ -191,7 +191,10 @@ C++标准库通过*std::mutex*实现*mutex*：
     class threadsafe_stack {
     public:
         threadsafe_stack() {}
-        threadsafe_stack(const threadsafe_stack& _stack) :m_stack(_stack) {}
+        threadsafe_stack(const threadsafe_stack& _stack) {
+            std::lock_guard<std::mutex> g(_stack.m);
+            m_stack = _stack.m_stack;
+        }
         threadsafe_stack& operator=(const threadsafe_stack&) = delete;
 
         void push(T _val) {
@@ -222,6 +225,14 @@ C++标准库通过*std::mutex*实现*mutex*：
         std::mutex m_mutex;
         std::stack<T> m_stack;
     };
+
+实现去除了*copy assginment operator*，保留了*copy constructor*。同时在*copy constructor*也使用了互斥保护。
+
+以上描述的都是因为*mutex*保护范围不够充分导致*race condition*的情况，但是如果*mutex*保护范围过大，会导致线程阻塞时间过长，不仅抹除并发所带来的性能提升，甚至导致其性能还不如单线程实现。
+
+当程序需要多个*mutex*协作阻塞时，比如同一个类的不同实例，有可能出现多个线程都被*mutex*阻塞，等待其他线程，即死锁*deadlock*。
+
+## Deadlock：the problem and solution
 
 
 
