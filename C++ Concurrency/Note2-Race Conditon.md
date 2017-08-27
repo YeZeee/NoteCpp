@@ -1,6 +1,6 @@
-# Sharing data between threads
+# Race condition
 
-## Problem with sharing data between threads
+## Problem with sharing data between threads and race condition
 
 当多个线程的共享数据是只读*readonly*的情况，是不会产生额外要分析的问题的。但当多个线程其中包含又对共享数据写权限的线程时候，就会产生额外的问题。
 
@@ -231,11 +231,4 @@ C++标准库通过*std::mutex*实现*mutex*：
 以上描述的都是因为*mutex*保护范围不够充分导致*race condition*的情况，但是如果*mutex*保护范围过大，会导致线程阻塞时间过长，不仅抹除并发所带来的性能提升，甚至导致其性能还不如单线程实现。
 
 当程序需要多个*mutex*协作阻塞时，比如同一个类的不同实例，有可能出现多个线程都被*mutex*阻塞，等待其他线程，即死锁*deadlock*。
-
-## Deadlock：the problem and solution
-
-
-
-
-
 
