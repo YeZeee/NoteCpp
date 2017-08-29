@@ -113,12 +113,99 @@
         other_stuff();
     }
 
-*thread_a*可以正常工作，而*thread_b*就会触发*hierarchy_mutex*的异常。
+*thread_a*可以正常工作，而*thread_b*就会触发*hierarchical__mutex*的异常。
 
+*hierarchical_mutex*的实现也比较简单，相当于对*std::mutex*座一层封装，应当保持*std::mutex*应有的接口以保证和标准库的兼容：
 
+    class hierarchical_mutex {
+    public:
+        hierarchical_mutex() = delete;
+        hierarchical_mutex(const hierarchical_mutex&) = delete;
+        explicit hierarchical_mutex(unsigned int _val) 
+            :hierarchyValue(_val), previousHierarchyValue(0) {}
+        ~hierarchical_mutex() {	}
 
+        void lock() {
+            checkForHierarchyRule();
+            internalMutex.lock();
+            updateHierarchyValue();
+        }
+        void unlock() {
+            internalMutex.unlock();
+            thisThreadHierarchyValue = previousHierarchyValue;
+        }
+        bool try_lock() {
+            checkForHierarchyRule();
+            if(!internalMutex.try_lock())
+                return false;
+            updateHierarchyValue();
+            return true;
+        }
+    private:
+        std::mutex internalMutex;
+        unsigned int hierarchyValue;
+        unsigned int previousHierarchyValue;
+        static thread_local unsigned int thisThreadHierarchyValue;
+        void checkForHierarchyRule() {
+            if(hierarchyValue >= thisThreadHierarchyValue) {
+                throw std::logic_error("mutex hierarchy violated");
+            }
+        }
+        void updateHierarchyValue() {
+            previousHierarchyValue = thisThreadHierarchyValue;
+            thisThreadHierarchyValue = hierarchyValue;
+        }
+    };
 
+    thread_local unsigned int hierarchical_mutex::thisThreadHierarchyValue(UINT_MAX);
+
+*thisThreadHierarchyValue*是一个静态线程存储周期的类成员变量，用于记录线程层次，每个线程都各自拥有自己的记录，并初始化为最大值，为所有在该线程被使用的*mutex*共享：
+
+每当有新的*hierarchical mutex*在该线程要求*lock*时，将会将*mutex*的层次和线程层次进行对比，若该线程层次已经高于*mutex*的层次，则正常进行*lock*操作；否则抛出异常进行异常处理。
+
+*try_lock*操作同理。
+
+当一个*mutex*进行*unlock*操作时，线程层次将退回该*mutex*进行*lock*之前的值。
+
+应当配合*std::lock_guard*或者*std::lock*来保证*hierarchical mutex*的正常使用。
+
+当然这种实现也可以作为多线程设计的一种参考，即使不用于运行期检查。
 
 ### Extending these guidelines beyond locks
+
+*deadlock*不一定要求出现*lock*，任何同步构建的过程都有可能造成等待死循环，从而导致*deadlock*。所以应当将上述建议扩充，比如：避免在持有*lock*的情况下，进行等待其他线程的行为；尽量只在开启子线程的线程中进行该线程的*join*。
+
+使用*std::lock_guard*和*std::lock*代替直接操作*std::mutex*。
+
+## Flexible locking with std::unique_lock
+
+标准库提供了比*std::lock_guard*更加灵活的*std::unique_lock*:它关联一个*std::mutex*而不像*std::lock_guard*完全持有。
+
+*std::unique_lock*提供了和*std::mutex*一样的一套*lock*操作，
+
+*std::unique_lock*提供了*std::defer_lock*，*std::defer_lock*使得*std::unique_lock*的构造函数不进行*lock*操作，可以延后手动进行*std::lock*操作。
+
+但提供额外灵活性的同时*std::unique_lock*会要求更多的存储空间用于存储状态，以及稍慢的运行效率：
+
+    class some_big_object;
+    void swap(some_big_object& lhs,some_big_object& rhs);
+
+    class X {
+    private:
+        some_big_object some_detail;
+        std::mutex m;
+    public:
+        X(some_big_object const& sd):some_detail(sd){}
+        friend void swap(X& lhs, X& rhs) {
+            if(&lhs==&rhs)
+                return;
+            std::unique_lock<std::mutex> lock_a(lhs.m,std::defer_lock);
+            std::unique_lock<std::mutex> lock_b(rhs.m,std::defer_lock);
+            std::lock(lock_a,lock_b);
+            swap(lhs.some_detail,rhs.some_detail);
+        }
+    }
+
+## Transferring mutex ownership between scopes
 
 
