@@ -206,6 +206,21 @@
         }
     }
 
-## Transferring mutex ownership between scopes
+*std::unique_lock*还提供移动构造函数和移动赋值操作符来传递*std::mutex*的所有权，是典型的可移动不可拷贝对象。
 
+*std::lock_guard*提供了最简单*std::mutex*锁定管理的RAII实现，意味着其无法穿过其作用域发挥锁定作用，而*std::unique_lock*可以通过转移持有权来使得锁定穿越其生命周期：
 
+    std::unique_lock<std::mutex> get_lock() {
+        extern std::mutex some_mutex;
+        std::unique_lock<std::mutex> lk(some_mutex);
+        prepare_data();
+        return lk;
+    }
+    void process_data() {
+        std::unique_lock<std::mutex> lk(get_lock());
+        do_something();
+    }
+
+通过转移*std::mutex*的持有权，其锁定就可以连续的发生在两个函数的生命周期内，从process_data开始，穿过get_lock，直到process_data结束。
+
+同时*std::unique_lock*也提供了提前解锁或者释放*std::mutex*的能力，这意味锁定可以在*std::unique_lock*的生命周期内结束。因为长时间的锁定会造成严重的性能问题，应当以“必要时锁定”为设计目标，*std::lock_guard*不具备这样的能力。
