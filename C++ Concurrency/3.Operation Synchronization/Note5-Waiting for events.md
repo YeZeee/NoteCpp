@@ -1,4 +1,4 @@
-# Condition variable
+# Waiting for events
 
 ## Why do not use shared data to synchronize operation
 
