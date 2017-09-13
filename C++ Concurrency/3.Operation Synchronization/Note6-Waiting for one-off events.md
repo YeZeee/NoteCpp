@@ -2,7 +2,7 @@
 
 C++标准库使用*std::future*来标示一个一次性事件：
 
-- *std::future*本身是用于提供一个链接异步操作的途径，可以通过：*std::async*|*std::packet_task*|*std::promist*来构造
+- *std::future*本身是用于提供一个链接异步操作的途径，可以通过：*std::async*|*std::packaged_task*|*std::promist*来构造
 - *std::future*可以绑定一个异步操作返回的数据块，*std::future*的持有线程可以通过*wait*|*get*|*valid*等方式进行操作，如果异步操作尚未产生返回，则该方法会产生阻塞。
 
 ## std::async,returning values from background task
@@ -54,8 +54,47 @@ C++标准库使用*std::future*来标示一个一次性事件：
         return std::accumulate(std::begin(vecResult), std::end(vecResult), 0);
     }
 
-## std::packet_task，associating a task with a future
+## std::packaged_task，associating a task with a future
 
+*std::packgaed_task*可以包装一个*callable object*来使得其可以异步调用，返回内容通过*std::future*来访问。可以用于构建线程池；以及其他任务管理。  
+*std::packaged_task*的模板参数是一个函数类型（注意函数类型中存在隐式转换）。  
+*std::packaged_task*自身也是一个*callable object*，可以进一步封装也可以直接调用。  
+*std::packaged_task*是*movable*和*swapable*的。
+
+    std::mutex m;
+    std::deque<std::packaged_task<void()> > tasks;
+    bool gui_shutdown_message_received();
+    void get_and_process_gui_message();
+    void gui_thread()
+    {
+        while(!gui_shutdown_message_received())
+        {
+            get_and_process_gui_message();
+            std::packaged_task<void()> task;
+            {
+                std::lock_guard<std::mutex> lk(m);
+                if(tasks.empty())
+                continue;
+                task=std::move(tasks.front());
+                tasks.pop_front();
+            }
+            task();
+        }
+    }
+    std::thread gui_bg_thread(gui_thread);
+    template<typename Func>
+    std::future<void> post_task_for_gui_thread(Func f)
+    {
+        std::packaged_task<void()> task(f);
+        std::future<void> res=task.get_future();
+        std::lock_guard<std::mutex> lk(m);
+        tasks.push_back(std::move(task));
+        return res;
+    }
+
+来自书上的例子，*gui_thread*通过一个任务队列接收任务并且执行；*post_task_for_gui_thrad*通过向一个任务队列加入任务来发布任务，并且将该任务的*future*返回给外层，注意*get_future*对于一个任务只能调用一次。
+
+## std::promise, make promises
 
 
 
