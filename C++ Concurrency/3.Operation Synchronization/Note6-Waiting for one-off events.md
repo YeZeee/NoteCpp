@@ -200,5 +200,24 @@ C++标准库使用*std::future*来标示一个一次性事件：
 
 ## Waiting from multiple threads
 
+*std::future*用于在线程间（或者非线程间）一次性传递各种结果，并且对一个实例的操作没有任何同步行为。如果在多个线程对同一个*std::future*进行操作就会产生*data race*。  
+因此*std::future*被设计对持有数据为*unique ownership*，一次绑定只能进行一次*get*操作，不应该在多个线程引用一个*std::future*实例。  
+
+为了满足多个线程获取同一个消息，*std::shared_future*被设计为*shared ownership*。*std::future*只能被*move*，数据可以被传递并且只能被*get*一次。而*std::shared_future*可以被*copy*，多个*future*可以关联同一块数据。
+
+注意为了多个线程访问一块数据不出现*data race*，应该在不同线程*copy*一个*std::shared_future*而不是引用它，因为对于一个实例的不同成员函数并没有同步，一个线程只应该保留一个*std::shared_future*。
+
+    std::promise<std::string> p;
+    std::shared_future<std::string> sf(p.get_future());
+
+    std::promise<int> p;
+    std::future<int> f(p.get_future());
+    std::shared_future<int> sf(std::move(f));
+
+使用auto来推断*std::shared_future*类型：
+
+    std::promise< std::map< SomeIndexType, SomeDataType, SomeComparator,
+    SomeAllocator>::iterator> p;
+    auto sf=p.get_future().share()
 
 
