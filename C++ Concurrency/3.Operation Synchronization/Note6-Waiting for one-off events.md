@@ -96,8 +96,109 @@ C++标准库使用*std::future*来标示一个一次性事件：
 
 ## std::promise, make promises
 
+*std::promise*用于设置一个异步接受的值，*movable*。
+
+    void accumulate(std::vector<int>::iterator first,
+                    std::vector<int>::iterator last,
+                    std::promise<int> accumulate_promise)
+    {
+        int sum = std::accumulate(first, last, 0);
+        accumulate_promise.set_value(sum);  // Notify future
+    }
+    
+    void do_work(std::promise<void> barrier)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        barrier.set_value();
+    }
+    
+    int main()
+    {
+        // Demonstrate using promise<int> to transmit a result between threads.
+        std::vector<int> numbers = { 1, 2, 3, 4, 5, 6 };
+        std::promise<int> accumulate_promise;
+        std::future<int> accumulate_future = accumulate_promise.get_future();
+        std::thread work_thread(accumulate, numbers.begin(), numbers.end(), std::move(accumulate_promise));
+        accumulate_future.wait();  // wait for result
+        std::cout << "result=" << accumulate_future.get() << '\n';
+        work_thread.join();  // wait for thread completion
+        std::promise<void> barrier;
+        std::future<void> barrier_future = barrier.get_future();
+        std::thread new_work_thread(do_work, std::move(barrier));
+        barrier_future.wait();
+        new_work_thread.join();
+    }
+
+来自cppreference的例子，在当前线程使用一个*std::future*获取一个*std::promise*的未来结果，让后将*promise*移动给新线程。新线程执行完成后设置*promise*的值，当前线程可以通过*future*获得该值。
+
+*std::promise\<void>*用于不需要任何值的情况，可以单纯的用于阻塞或者定时或者标示某些代码块已经执行完成。
+
+## Saving exception for the future
+
+*std::future*除了返回值以外也可以返回异常，将异常抛到当前*std::future*所在线程进行处理，有以下几种情况会使得*std::future*产生异常。
+
+- *std::async*和*std::packaged_task*执行的代码块抛出异常。
+- *std::promise*设置异常。
+- *std::packaged_task*和*std::promise*进行了非法操作。
+
+使用get(),重新抛出异常，比如情况一:
+
+    double sqrt_root(int i) { 
+        if(i < 
+        0)
+            throw std::out_of_range("i<0");
+        return sqrt(i);
+    }
+
+    void foo() {
+        std::future<double> f = std::async(std::lauch::async, sqrt_root, -1);
+        try {
+            f.get();
+        } catch(const std::out_of_range& e){
+            std::cout << "out_of_range: " << e.what() << std::endl;
+        }
+    }
+
+情况二：
+
+    void some(std::promise<double> p) {
+        try {
+            p.set_value(some_func_may_throw());
+
+        } catch(const std::exception& e) {
+            p.set_exception(std::current_exception());
+        }
+    }
+
+    void foo() {
+        std::promise<double> p;
+        std::future<double> f = p.get_future();
+        std::thread t1(some, std::move(p));
+        try {
+            f.get();
+        } catch(const std::exception& e) {
+            std::cout << "out_of_range: " << e.what() << std::endl;
+        }
+    }
+
+抛出*std::future_error*，情况三：
+
+    void foo() {
+        std::future<double> f;
+        {
+            std::promise<double> p;
+            f = p.get_future();
+        }
+        try {
+            f.get();
+        } catch(cosnt std::future_error& e) {
+            if(e.code() == std::future_errc::broken_promise)
+			std::cout << "exception: " << e.what() << std::endl;
+        }
+    }
 
 
+## Waiting from multiple threads
 
 
 
